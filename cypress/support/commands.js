@@ -1,8 +1,22 @@
 require('cypress-downloadfile/lib/downloadFileCommand')
 
+/**
+ * Dismiss clusters onboarding modal if it appears (used after login and after session restore).
+ */
+const tryCloseOnboardingModal = (attempt = 1, maxRetries = 25, retryDelay = 2000) => {
+  cy.get('body').then(($body) => {
+    const $btn = $body.find('[data-ouia-component-id="clustersOnboardingModal-ModalBoxCloseButton"]')
+    if ($btn.length > 0) {
+      cy.get('[data-ouia-component-id="clustersOnboardingModal-ModalBoxCloseButton"]').click()
+    } else if (attempt < maxRetries) {
+      cy.wait(retryDelay)
+      tryCloseOnboardingModal(attempt + 1, maxRetries, retryDelay)
+    }
+  })
+}
 
 Cypress.Commands.add('login', (url=`${Cypress.env('host')}`, auth=`${Cypress.env('auth')}`, user=`${Cypress.env('username')}`, password=`${Cypress.env('password')}`) => {
-    cy.visit(url)
+    cy.visit(url, { timeout: 60000, retryOnStatusCodeFailure: true })
     cy.origin(auth, { args: { username: user, password: password } }, ({ username, password }) => {
         //cy.get('.pf-c-button', { timeout: 60000 })
         cy.get('.pf-v6-c-button').contains('kube:admin').click()
@@ -16,19 +30,29 @@ Cypress.Commands.add('login', (url=`${Cypress.env('host')}`, auth=`${Cypress.env
         cy.get('#inputPassword').should('have.value', password)
         cy.get('#co-login-button').click()
       })
-    const tryCloseOnboardingModal = (attempt = 1, maxRetries = 15, retryDelay = 2000) => {
-      cy.get('body').then(($body) => {
-        const $btn = $body.find('[data-ouia-component-id="clustersOnboardingModal-ModalBoxCloseButton"]')
-        if ($btn.length > 0) {
-          cy.get('[data-ouia-component-id="clustersOnboardingModal-ModalBoxCloseButton"]').click()
-        } else if (attempt < maxRetries) {
-          cy.wait(retryDelay)
-          tryCloseOnboardingModal(attempt + 1, maxRetries, retryDelay)
-        }
-      })
-    }
     tryCloseOnboardingModal()
     cy.url().should('include', `${Cypress.env('host')}`)    
+})
+
+/**
+ * Restores a cached browser session after the first successful login.
+ * Use in beforeEach instead of cy.login() to avoid logging in before every test.
+ * Session key includes host/auth/user so changing env invalidates the cache.
+ */
+Cypress.Commands.add('ensureLoggedIn', () => {
+  const host = Cypress.env('host')
+  const auth = Cypress.env('auth')
+  const user = Cypress.env('username')
+  const password = Cypress.env('password')
+  cy.session(
+    ['openshift-console', host, auth, user],
+    () => {
+      cy.login(host, auth, user, password)
+    }
+  )
+  cy.visit(host, { timeout: 60000, retryOnStatusCodeFailure: true })
+  tryCloseOnboardingModal()
+  cy.url().should('include', host)
 })
 
 Cypress.Commands.add('downloadClifile', (platform = `${Cypress.env('platform')}`, arch = `${Cypress.env('arch')}`) => {

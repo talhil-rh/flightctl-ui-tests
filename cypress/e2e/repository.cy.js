@@ -1,8 +1,8 @@
 import { repositoriesPage } from '../views/repositoriesPage'
 
 describe('Repository Management', () => {
-  beforeEach(() => {
-    cy.login(`${Cypress.env('host')}`, `${Cypress.env('auth')}`, `${Cypress.env('username')}`, `${Cypress.env('password')}`)
+  before(() => {
+    cy.ensureLoggedIn()
   })
 
   /* it('Should create a repository', () => {

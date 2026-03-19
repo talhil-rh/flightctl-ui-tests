@@ -1,15 +1,58 @@
 import { common } from './common'
 
+/** Alias validation: red error icon color when invalid */
+const VALIDATION_ERROR_ICON_COLOR = '#b1380b'
+
 /**
  * DevicesPage object for device management operations
  */
 export const devicesPage = {
   /**
+   * Open the "Approve pending device" modal without approving.
+   * Use for validation checks only. Call fillAliasInApproveModal and
+   * expectValidationIconError as needed, then closeApproveDeviceModal.
+   */
+  openApproveDeviceModal: () => {
+    common.navigateTo('Devices')
+    cy.get('h2.pf-v6-c-title.pf-m-3xl').contains('Devices pending approval')
+    cy.get('[data-label="Approve"] > .pf-v6-c-button').should('exist')
+    cy.get('[data-label="Approve"] > .pf-v6-c-button').should('be.visible')
+    cy.get('[data-label="Approve"] > .pf-v6-c-button').click()
+    cy.get('#rich-validation-field-deviceAlias').should('be.visible')
+  },
+
+  /**
+   * Fill the Alias field in the open Approve device modal.
+   */
+  fillAliasInApproveModal: (alias) => {
+    cy.get('#rich-validation-field-deviceAlias').clear()
+    cy.get('#rich-validation-field-deviceAlias').type(alias)
+    cy.get('#rich-validation-field-deviceAlias').should('have.value', alias)
+  },
+
+  /**
+   * Assert the validation icon shows error state (red #b1380b).
+   * Uses button[aria-label="Validation"] and its SVG color.
+   */
+  expectValidationIconError: () => {
+    cy.get('button[aria-label="Validation"]').should('be.visible')
+    cy.get('button[aria-label="Validation"]').find('svg').should('have.attr', 'color', VALIDATION_ERROR_ICON_COLOR)
+  },
+
+  /**
+   * Close the Approve device modal without approving (Cancel).
+   */
+  closeApproveDeviceModal: () => {
+    cy.contains('Cancel').click()
+    cy.get('#rich-validation-field-deviceAlias').should('not.exist')
+  },
+
+  /**
    * Approve a device enrollment request
    */
   approveDevice: (deviceName = 'test-device') => {
     common.navigateTo('Devices')
-    
+
     cy.get('h2.pf-v6-c-title.pf-m-3xl').contains('Devices pending approval')
     cy.get('[data-label="Approve"] > .pf-v6-c-button').should('exist')
     cy.get('[data-label="Approve"] > .pf-v6-c-button').should('be.visible')
@@ -20,6 +63,23 @@ export const devicesPage = {
     cy.get('.pf-v6-c-form__actions > .pf-m-primary').should('be.visible')
     cy.get('.pf-v6-c-form__actions > .pf-m-primary').click()
     cy.get('[data-label="Device status"]', { timeout: 500000 }).should('contain', 'Online')
+  },
+
+
+  deviceEvents: (deviceName = 'test-device' ) => {
+    common.navigateTo('Devices')
+    cy.wait(1000)
+    cy.get('a > .fctl-resource-link__text').contains(deviceName).should('be.visible').click()
+    cy.wait(1000)
+    cy.get('[id^="pf-tab-events-pf"]').contains('Events').should('be.visible').click()
+    cy.wait(1000)
+    cy.get('.pf-v6-c-menu-toggle.pf-m-expanded').click()
+    cy.wait(1000)
+    cy.get('.pf-v6-c-menu__item-text').contains('All types').click()
+    cy.get('.pf-v6-c-card__body.fctl-events-container')
+      .should('contain', 'Device returned to being up-to-date')
+      .and('contain', 'Device is updating')
+      .and('contain', 'Device was created successfully')
   },
 
   /**

@@ -2,8 +2,8 @@ import { fleetsPage } from '../views/fleetsPage'
 import { repositoriesPage } from '../views/repositoriesPage'
 
 describe('Fleet Management', () => {
-  beforeEach(() => {
-    cy.login(`${Cypress.env('host')}`, `${Cypress.env('auth')}`, `${Cypress.env('username')}`, `${Cypress.env('password')}`)
+  before(() => {
+    cy.ensureLoggedIn()
   })
 
   it('Should create a fleet', () => {

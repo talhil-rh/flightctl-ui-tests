@@ -8,6 +8,10 @@ module.exports = defineConfig({
   viewportWidth: parseInt(process.env.CYPRESS_VIEWPORT_WIDTH, 10) || 1280,
   viewportHeight: parseInt(process.env.CYPRESS_VIEWPORT_HEIGHT, 10) || 720,
   e2e: {
+    // Same idea as kni-assisted-installer-auto/ui_tests: keep URL, cookies, and SPA state
+    // between `it` blocks instead of resetting the browser each time.
+    // Use before() + cy.ensureLoggedIn() once per top-level describe (not beforeEach).
+    testIsolation: false,
     setupNodeEvents(on, config) {
       on('task', {downloadFile})
     },
