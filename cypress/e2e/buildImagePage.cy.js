@@ -1,6 +1,6 @@
 import { buildImagePage } from '../views/buildImagePage'
 
-const BUILD_NAME        = 'new-build-flightctl'
+const BUILD_NAME        = Cypress.env('buildName') || 'new-build-flightctl'
 const SOURCE_IMAGE_NAME = 'centos-bootc/centos-bootc'
 const SOURCE_IMAGE_TAG  = 'stream10'
 const OUTPUT_IMAGE_TAG  = '1.0.0'

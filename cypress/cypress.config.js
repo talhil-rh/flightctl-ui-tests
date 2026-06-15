@@ -43,6 +43,10 @@ module.exports = defineConfig({
     yaml: process.env.YAML || '/demos/basic-nginx-demo/deployment/fleet.yaml',
     newyaml: process.env.NEWYAML || '/demos/quadlet-wordpress-demo/deployment/fleet.yaml',
     repositoryname: process.env.REPOSITORYNAME || 'test-repository',
+    buildName: process.env.BUILD_NAME || 'new-build-flightctl',
+    // Set to true (CYPRESS_SKIP_SIMULATOR=true) when running the device simulator manually.
+    // Skips all simulator start/stop/wait/cleanup tasks in softwareCatalogPage.cy.js.
+    skipSimulator: process.env.CYPRESS_SKIP_SIMULATOR === 'true' || false,
     flightctlRepoWithWriteName:     process.env.FLIGHTCTL_REPO_WITH_WRITE_NAME     || 'flightctl-repo',
     flightctlRepoWithWriteHostName: process.env.FLIGHTCTL_REPO_WITH_WRITE_HOSTNAME || '',
     flightctlRepoWithWriteUrl:      process.env.FLIGHTCTL_REPO_WITH_WRITE_URL      || '',

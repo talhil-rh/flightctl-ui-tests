@@ -82,7 +82,7 @@ function registerScaleFleetSimulatorTasks(on) {
      * Spawns the device simulator with fixed scale-demo arguments (50 devices, fleet label, concurrency 1).
      * If a simulator child is already running, returns `{ alreadyRunning: true }` instead of starting another.
      */
-    scaleFleetSimulatorStart() {
+    scaleFleetSimulatorStart({ count = 50, label = 'fleet=scale-fleet-00', initialDeviceIndex = 0 } = {}) {
       if (simulatorProcess && !simulatorProcess.killed) {
         return { alreadyRunning: true, pid: simulatorProcess.pid }
       }
@@ -98,12 +98,12 @@ function registerScaleFleetSimulatorTasks(on) {
       }
       const bin = getSimulatorBin()
       const args = [
-        '--count=50',
+        `--count=${count}`,
         '--label',
-        'fleet=scale-fleet-00',
+        label,
         '--log-level',
         'error',
-        '--initial-device-index=0',
+        `--initial-device-index=${initialDeviceIndex}`,
         '--max-concurrency',
         '10',
       ]
