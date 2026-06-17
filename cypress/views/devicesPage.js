@@ -43,6 +43,32 @@ const FLEET_DEVICE_SELECTOR_LABELS = {
 /** Real `<input>` inside PatternFly TextInputGroup (`#typeahead-select-input` is the wrapper div). */
 const FLEET_LABEL_TYPEAHEAD_INPUT = '#typeahead-select-input input'
 
+/**
+ * Syslog priority levels mapped to their UI dropdown labels.
+ * Ordered by severity (highest first) — used for priority inclusivity tests:
+ * filtering at index N should show markers for all priorities 0..N.
+ */
+export const LOG_PRIORITIES = [
+  { key: 'emerg',   level: 'Only emergency' },
+  { key: 'alert',   level: 'Alert and above' },
+  { key: 'crit',    level: 'Critical and above' },
+  { key: 'err',     level: 'Error and above' },
+  { key: 'warning', level: 'Warning and above' },
+  { key: 'notice',  level: 'Notice and above' },
+  { key: 'info',    level: 'Info and above' },
+  { key: 'debug',   level: 'Debug and above' },
+]
+
+const LOGS_TAB = '[data-testid="device-details-tab-logs"]'
+const LOG_VIEWER = '.pf-v6-c-log-viewer'
+const LOG_VIEWER_LINE = '.pf-v6-c-log-viewer__list-item'
+const LOG_SEARCH_INPUT = 'input[placeholder="Search logs"]'
+const LOG_FILE_PATH_INPUT = 'input[name="logFilePath"]'
+const LOG_CATEGORY_TOGGLE = /^(Agent|System|File path)$/
+const LOG_TIME_RANGE_TOGGLE = /^(All time|Last 1 hour|Last 24 hours|Last 7 days|Current boot|Previous boot|Custom range)$/
+const LOG_LEVEL_TOGGLE = /All levels|and above|Only emergency/
+const LOG_RETRIEVE_TIMEOUT = 60000
+
 const enrolledDeviceRows = () =>
   cy.get('[data-testid="enrolled-devices-table"] tbody tr[data-testid^="enrolled-device-row-"]')
 
@@ -267,6 +293,52 @@ export const devicesPage = {
     cy.get('[data-testid="device-details-tab-terminal"]', { timeout: 30000 }).should('be.visible').click()
     cy.get('[data-testid="device-terminal-panel"]', { timeout: 50000 }).should('be.visible')
     cy.get('[data-testid="device-terminal-panel"]').click()
+  },
+
+  openDeviceLogs: (deviceName) => {
+    common.navigateTo('Devices')
+    if (deviceName) {
+      cy.contains(`[data-testid^="device-name-link-"]`, deviceName, { timeout: 15000 })
+        .should('be.visible').click()
+    } else {
+      cy.get(`[data-testid^="device-name-link-"]`, { timeout: 15000 })
+        .first().should('be.visible').click()
+    }
+    cy.get(LOGS_TAB, { timeout: 15000 }).should('be.visible').click()
+    cy.contains('button', 'Retrieve logs', { timeout: 15000 }).should('be.visible')
+  },
+
+  retrieveLogsAndVerify: () => {
+    cy.contains('button', 'Retrieve logs', { timeout: 15000 })
+      .should('be.visible')
+      .should('not.be.disabled')
+      .click()
+    cy.get(LOG_VIEWER, { timeout: LOG_RETRIEVE_TIMEOUT }).should('be.visible')
+    cy.get(LOG_VIEWER_LINE, { timeout: LOG_RETRIEVE_TIMEOUT })
+      .should('have.length.greaterThan', 0)
+  },
+
+  selectLogCategory: (category) => {
+    cy.contains('button', LOG_CATEGORY_TOGGLE, { timeout: 15000 })
+      .should('be.visible').click()
+    cy.get('[role="option"]').contains(category).click()
+  },
+
+  selectLogTimeRange: (label) => {
+    cy.contains('button', LOG_TIME_RANGE_TOGGLE, { timeout: 15000 })
+      .should('be.visible').click()
+    cy.get('[role="option"]').contains(label).click()
+  },
+
+  selectLogLevel: (label) => {
+    cy.contains('button', LOG_LEVEL_TOGGLE, { timeout: 15000 })
+      .should('be.visible').click()
+    cy.get('[role="option"]').contains(label).click()
+  },
+
+  searchLogsFor: (text) => {
+    cy.get(LOG_SEARCH_INPUT, { timeout: 10000 }).clear().type(text)
+    cy.contains(/[1-9]\d*\s*\/\s*[1-9]\d*/, { timeout: 10000 }).should('be.visible')
   },
 
   /** Leave decommissioned list and show enrolled devices (same switch data-testid on both tables). */

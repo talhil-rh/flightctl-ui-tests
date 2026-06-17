@@ -1,6 +1,7 @@
 const { defineConfig } = require('cypress')
 const { downloadFile } = require('cypress-downloadfile/lib/addPlugin')
 const { registerScaleFleetSimulatorTasks } = require('./plugins/scaleFleetSimulatorTasks')
+const { registerFlightctlConsoleTasks } = require('./plugins/flightctlConsoleTasks')
 
 module.exports = defineConfig({
   video: true,
@@ -16,6 +17,7 @@ module.exports = defineConfig({
     setupNodeEvents(on, config) {
       on('task', { downloadFile })
       registerScaleFleetSimulatorTasks(on)
+      registerFlightctlConsoleTasks(on)
       // HTTPS oauth → http://localhost callback needs chromeWebSecurity off for the device-login spec
       // only; keep default true for other e2e specs.
       const norm = (p) => String(p).replace(/\\/g, '/')
