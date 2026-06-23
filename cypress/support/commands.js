@@ -53,14 +53,14 @@ const tryCloseOnboardingModal = (attempt = 1, maxRetries = 15, retryDelay = 2000
 }
 
 /**
- * Open the top perspective menu and choose Fleet Management (Flight / edge console).
+ * Open the top perspective menu and choose Fleet management (Flight / edge console).
  */
 Cypress.Commands.add('selectFleetManagementPerspective', () => {
   cy.get('[data-test-id="perspective-switcher-toggle"]', { timeout: 30000 })
     .should('be.visible')
     .click()
   cy.get('[data-test-id="perspective-switcher-menu-option"]')
-    .contains('Fleet Management')
+    .contains('Fleet management')
     .should('be.visible')
     .click()
 })
