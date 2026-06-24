@@ -137,3 +137,80 @@ Cypress.Commands.add('downloadClifile', (platform = `${Cypress.env('platform')}`
   cy.log(`Downloaded file: ${fullpath}`)
   cy.readFile(fullpath).should('exist')
 })
+
+/**
+ * Quadlets login — used when the FlightCtl server runs as systemd+Podman (no OCP).
+ * In this deployment the PAM issuer lives at the same origin as the console
+ * (https://flightctl-vm.local/_/pam-issuer), so cy.origin() cannot be used.
+ *
+ * The PAM login form uses JavaScript fetch() to POST credentials and then calls
+ * window.location.href with the authorize URL returned in the response body.
+ * Cypress's cookie proxy doesn't reliably propagate the Set-Cookie header from
+ * that async fetch response to the browser's cookie jar before the subsequent
+ * navigation fires, so the authorize redirect never receives the authenticated
+ * cookie and re-shows the login form.
+ *
+ * Fix: use cy.request() (which shares Cypress's own cookie jar) to POST the
+ * credentials directly, then cy.visit() the authorize URL returned in the body.
+ * cy.request() guarantees the authenticated cookie is stored before the visit.
+ */
+Cypress.Commands.add('loginQuadlet', (
+  url      = `${Cypress.env('host')}`,
+  user     = `${Cypress.env('username')}`,
+  password = `${Cypress.env('password')}`,
+) => {
+  // Step 1: load the app → PAM redirects to the authorize URL, setting the
+  // initial (unauthenticated) auth session cookie.
+  cy.visit(url, { timeout: 60000, retryOnStatusCodeFailure: true })
+  cy.url({ timeout: 30000 }).should('include', 'pam-issuer/api/v1/auth/authorize')
+
+  // Step 2: POST credentials via cy.request() so the authenticated auth cookie
+  // is stored in Cypress's cookie jar before the next navigation.
+  cy.url().then((authorizeUrl) => {
+    const loginUrl = authorizeUrl.replace(/\/authorize(\?.*)?$/, '/login')
+    cy.request({
+      method: 'POST',
+      url: loginUrl,
+      form: true,
+      body: { username: user, password: password },
+    }).then((resp) => {
+      // The server returns 200 with a relative authorize URL in the body.
+      // Resolve it against the current authorize URL and visit it — the server
+      // now sees the authenticated cookie and redirects to /callback.
+      const resolvedUrl = new URL(resp.body, authorizeUrl).href
+      cy.visit(resolvedUrl, { timeout: 60000 })
+    })
+  })
+
+  cy.url({ timeout: 30000 }).should('not.include', 'pam-issuer')
+  cy.get('[data-testid="nav-toggle"], #page-toggle-button', { timeout: 30000 }).should('exist')
+})
+
+/**
+ * Overwrite cy.login to automatically delegate to cy.loginQuadlet when the
+ * auth URL shares the same origin as the console URL (quadlets case), or when
+ * no auth URL is configured at all.
+ * Falls back to the original OCP login (cy.origin + kube:admin flow) otherwise.
+ */
+Cypress.Commands.overwrite('login', (originalFn, url, auth, user, password) => {
+  const resolvedUrl  = url      || Cypress.env('host')
+  const resolvedAuth = auth     || Cypress.env('auth')
+  const resolvedUser = user     || Cypress.env('username')
+  const resolvedPw   = password || Cypress.env('password')
+
+  // Use quadlet login when there is no separate auth URL, or when the auth
+  // URL is the same origin as the console (PAM issuer embedded in the app).
+  let useQuadletLogin = !resolvedAuth || resolvedAuth === 'undefined'
+  if (!useQuadletLogin) {
+    try {
+      useQuadletLogin = new URL(resolvedAuth).origin === new URL(resolvedUrl).origin
+    } catch (_) {
+      useQuadletLogin = true
+    }
+  }
+
+  if (useQuadletLogin) {
+    return cy.loginQuadlet(resolvedUrl, resolvedUser, resolvedPw)
+  }
+  return originalFn(resolvedUrl, resolvedAuth, resolvedUser, resolvedPw)
+})
