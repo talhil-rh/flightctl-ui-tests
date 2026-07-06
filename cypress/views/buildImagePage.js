@@ -112,7 +112,7 @@ export const buildImagePage = {
   submitRepositoryAndWaitForAccessible: () => {
     cy.get('[data-testid="repository-form-submit"]').should('be.visible').click()
     //cy.get('[data-testid="repository-details-sync-status"]', { timeout: 30000 })
-    //  .should('contain', 'Accessible')
+    //  .should('contain', 'Available')
   },
 
   // ── Wizard entry ───────────────────────────────────────────────────────────
@@ -148,7 +148,7 @@ export const buildImagePage = {
   },
 
   waitForImageAccessible: () => {
-    cy.contains('Accessible', { timeout: 30000 }).should('be.visible')
+    cy.contains('Available', { timeout: 30000 }).should('be.visible')
   },
 
   clickNext: () => {
