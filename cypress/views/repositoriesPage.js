@@ -160,7 +160,7 @@ export const repositoriesPage = {
     cy.get('[data-testid="textfield-resourceSyncs[0].targetRevision"]').type(revision)
     cy.get('[data-testid="textfield-resourceSyncs[0].path"]').type(resource)
     cy.get('[data-testid="repository-form-submit"]').click()
-    cy.get('[data-testid="repository-details-sync-status"]', { timeout: 100000 }).should('contain', 'Accessible')
+    cy.get('[data-testid="repository-details-sync-status"]', { timeout: 100000 }).should('contain', 'Available')
   },
 
   /**
@@ -184,7 +184,7 @@ export const repositoriesPage = {
     cy.get('[data-testid="textfield-resourceSyncs[1].path"]').clear()
     cy.get('[data-testid="textfield-resourceSyncs[1].path"]').type(newyaml)
     cy.get('[data-testid="repository-form-submit"]').click()
-    cy.get('[data-testid="repository-details-sync-status"]', { timeout: 100000 }).should('contain', 'Accessible')
+    cy.get('[data-testid="repository-details-sync-status"]', { timeout: 100000 }).should('contain', 'Available')
   },
 
   /**
