@@ -7,14 +7,36 @@ let organizationSelectionHandled = false
 
 export const common = {
   /**
+   * Visit a deep URL, translating /devicemanagement/ to /edge/ in ACM mode.
+   * @param {string} url - Full URL to visit
+   * @param {number} waitMs - ms to wait after visiting (default 2000)
+   */
+  visitPage: (url, waitMs = 2000) => {
+    const resolvedUrl = Cypress.env('useAcmNavigation')
+      ? url.replace(/\/devicemanagement\//, '/edge/')
+      : url
+    cy.visit(resolvedUrl, { timeout: 60000, retryOnStatusCodeFailure: true })
+    cy.wait(waitMs)
+  },
+
+  /**
    * Navigate to a page (supports both ACM multi-level nav and flat nav).
-   * @param {string} page - The page to navigate to (e.g., 'Devices', 'Fleets', 'Repositories')
+   * @param {string} page - The page to navigate to (e.g., 'Devices', 'Fleets', 'Repositories', 'Overview')
    */
   navigateTo: (page) => {
     /** Standalone: data-testid + id on masthead toggle; ACM may use #nav-toggle only */
     const navToggle = '[data-testid="nav-toggle"], #page-toggle-button, #nav-toggle'
 
     if (Cypress.env('useAcmNavigation')) {
+      // Overview is not a nav item under Edge Management — it's the ACM multicloud overview
+      // page with an injected "Edge devices" tab (acm.overview/tab extension).
+      if (page === 'Overview') {
+        cy.visit(`${Cypress.env('host')}/multicloud/home/overview`, { timeout: 60000 })
+        cy.contains('[role="tab"]', 'Edge devices', { timeout: 30000 }).should('be.visible').click()
+        common.selectOrganizationIfNeeded('Default')
+        return
+      }
+
       const acmSidebar = '.pf-v6-c-page__sidebar'
       cy.get(navToggle, { timeout: 30000 }).should('exist')
       // Only open the sidebar if it's collapsed (clicking when open would close it)
@@ -28,6 +50,32 @@ export const common = {
       })
       cy.get(acmSidebar, { timeout: 30000 }).should('be.visible')
       cy.wait(1000)
+      // If 'Edge Management' is absent the Fleet Management perspective may have been lost
+      // (e.g. a prior test failure left the browser on an ACM page outside the perspective).
+      // Select the perspective again and re-open the sidebar so the nav items appear.
+      cy.get('body').then(($body) => {
+        if ($body.find('button:contains("Edge Management")').length === 0) {
+          cy.log('⚠ "Edge Management" not in sidebar — re-selecting Fleet Management perspective')
+          cy.get('[data-test-id="perspective-switcher-toggle"]', { timeout: 10000 })
+            .should('be.visible')
+            .click()
+          cy.get('[data-test-id="perspective-switcher-menu-option"]')
+            .contains('Fleet management')
+            .should('be.visible')
+            .click()
+          // After perspective switch the sidebar may collapse — re-open if needed
+          cy.get('body').then(($b2) => {
+            const expanded =
+              $b2.find('.pf-v6-c-page__sidebar.pf-m-expanded').length > 0 ||
+              $b2.find(navToggle).attr('aria-expanded') === 'true'
+            if (!expanded) {
+              cy.get(navToggle).first().click()
+            }
+          })
+          cy.get(acmSidebar, { timeout: 30000 }).should('be.visible')
+          cy.wait(500)
+        }
+      })
       // Re-query on click: wrap($btn) can fail if the nav re-renders after sidebar opens.
       cy.contains('button', 'Edge Management', { timeout: 30000 })
         .should('be.visible')
@@ -37,10 +85,33 @@ export const common = {
           }
           cy.contains('button', 'Edge Management').should('be.visible').click()
         })
-      cy.get(acmSidebar).contains(page).click()
+      // Wait for the sidebar to finish re-rendering before querying the nav link.
+      // ACM re-renders the sidebar after expanding Edge Management; clicking too
+      // soon grabs a stale reference that detaches mid-click and lands on a wrong page.
+      cy.wait(500)
+      cy.contains(`${acmSidebar} a, ${acmSidebar} button`, page, { timeout: 15000 })
+        .should('be.visible')
+        .then(() => {
+          // Re-query fresh to avoid holding a stale reference from the assertion above.
+          cy.contains(`${acmSidebar} a, ${acmSidebar} button`, page).click()
+        })
       common.selectOrganizationIfNeeded('Default')
     } else {
       const sidebar = '.pf-v6-c-page__sidebar'
+      // Overview in standalone: use the sidebar nav item directly
+      if (page === 'Overview') {
+        common.selectOrganizationIfNeeded('Default')
+        cy.get(navToggle, { timeout: 30000 }).should('exist')
+        cy.get('body').then(($body) => {
+          const toggle = $body.find(navToggle).first()
+          const sidebarExpanded = toggle.attr('aria-expanded') === 'true'
+          if (!sidebarExpanded) {
+            cy.get(navToggle).first().click()
+          }
+        })
+        cy.get(sidebar).contains('Overview').click()
+        return
+      }
       common.selectOrganizationIfNeeded('Default')
       cy.get('[data-testid="nav-toggle"], #page-toggle-button', { timeout: 30000 }).should('exist')
       cy.get('body').then(($body) => {
@@ -52,7 +123,7 @@ export const common = {
       })
       cy.get(sidebar).contains(page).click()
     }
-    
+
   },
 
   /**

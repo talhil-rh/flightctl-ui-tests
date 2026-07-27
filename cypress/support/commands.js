@@ -85,7 +85,7 @@ Cypress.Commands.add('login', (url=`${Cypress.env('host')}`, auth=`${Cypress.env
     if (Cypress.env('useAcmNavigation')) {
       cy.selectFleetManagementPerspective()
     }
-    cy.url().should('include', `${Cypress.env('host')}`)    
+    cy.url().should('include', `${Cypress.env('host')}`)
 })
 
 /**

@@ -12,3 +12,5 @@ container/*.key
 container/config.yaml
 container/output
 
+node_modules/
+.claude/
