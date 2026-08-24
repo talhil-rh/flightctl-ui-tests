@@ -1,5 +1,9 @@
 import { devicesPage, LOG_PRIORITIES } from '../views/devicesPage'
 
+const DEVICE_NAME = 'test-device'
+const DEVICE_NAME_EDITED = 'test-device-edited'
+const DEVICE_NAME_EDITED_2 = 'test-device-edited2'
+
 describe('Device Management', () => {
   // One login + visit per spec file; later tests reuse the same tab (testIsolation: false).
   before(() => {
@@ -44,29 +48,31 @@ describe('Device Management', () => {
     })
   })
 
-  describe('Approve device, edit device, view device events', () => {
+  describe('Approve device', () => {
     it('Should approve a device enrollment request', () => {
-      devicesPage.approveDevice()
+      devicesPage.approveDevice(DEVICE_NAME)
     })
 
     /* it('Should open a terminal on a device', () => {
       devicesPage.openTerminal()
     }) */
+  })
 
+  describe('Edit device, view device events', () => {
     it('Should edit a device', () => {
-      devicesPage.editDevice(`${Cypress.env('image')}`)
+      devicesPage.editDevice(`${Cypress.env('image')}`, DEVICE_NAME, DEVICE_NAME_EDITED)
     })
 
     it('Should edit a device image - fake url', () => {
-      devicesPage.editDevice(`quay.io/redhat/rhde:9.2`, 'test-device-edited', 'test-device-edited2')
+      devicesPage.editDevice(`quay.io/redhat/rhde:9.2`, DEVICE_NAME_EDITED, DEVICE_NAME_EDITED_2)
     })
 
     it('Should make sure device is out-of-date', () => {
-      devicesPage.checkDeviceOutOfDate()
+      devicesPage.checkDeviceOutOfDate(DEVICE_NAME_EDITED_2)
     })
 
     it('Should view device events', () => {
-      devicesPage.deviceEvents()
+      devicesPage.deviceEvents(DEVICE_NAME_EDITED_2)
     })
   })
 
@@ -74,7 +80,7 @@ describe('Device Management', () => {
     const logMarker = (priority) => `CYPRESS_LOG_TEST_${priority.toUpperCase()}`
 
     it('Should retrieve agent logs with default filters', () => {
-      devicesPage.openDeviceLogs()
+      devicesPage.openDeviceLogs(DEVICE_NAME_EDITED_2)
       devicesPage.retrieveLogsAndVerify()
     })
 
@@ -90,7 +96,7 @@ describe('Device Management', () => {
     })
 
     it('Should show error for non-existing file path', () => {
-      devicesPage.openDeviceLogs()
+      devicesPage.openDeviceLogs(DEVICE_NAME_EDITED_2)
       devicesPage.selectLogCategory('File path')
       cy.get('input[name="logFilePath"]', { timeout: 15000 }).clear().type('nonexistent-file-xyz.log')
       cy.contains('button', 'Retrieve logs').should('not.be.disabled').click()
@@ -98,7 +104,7 @@ describe('Device Management', () => {
     })
 
     it('Should show error for directory file path', () => {
-      devicesPage.openDeviceLogs()
+      devicesPage.openDeviceLogs(DEVICE_NAME_EDITED_2)
       devicesPage.selectLogCategory('File path')
       cy.get('input[name="logFilePath"]', { timeout: 15000 }).clear().type('audit')
       cy.contains('button', 'Retrieve logs').should('not.be.disabled').click()
@@ -107,13 +113,14 @@ describe('Device Management', () => {
 
     it('Should inject logger messages at each syslog priority', () => {
       cy.task('flightctlConsoleCommand', {
+        deviceAlias: DEVICE_NAME_EDITED_2,
         commands: LOG_PRIORITIES.map(p => `logger -p user.${p.key} "${logMarker(p.key)}"`)
       })
     })
 
     LOG_PRIORITIES.forEach(({ key, level }, index) => {
       it(`Should show ${key} message and all higher priorities`, () => {
-        devicesPage.openDeviceLogs()
+        devicesPage.openDeviceLogs(DEVICE_NAME_EDITED_2)
         devicesPage.selectLogCategory('System')
         devicesPage.selectLogTimeRange('Last 1 hour')
         devicesPage.selectLogLevel(level)
@@ -126,7 +133,7 @@ describe('Device Management', () => {
     })
 
     it('Should enable live logs and receive new entries', () => {
-      devicesPage.openDeviceLogs()
+      devicesPage.openDeviceLogs(DEVICE_NAME_EDITED_2)
       devicesPage.selectLogCategory('Agent')
       devicesPage.selectLogTimeRange('Current boot')
       devicesPage.retrieveLogsAndVerify()
@@ -144,7 +151,7 @@ describe('Device Management', () => {
     })
 
     it('Should find and highlight search results', () => {
-      devicesPage.openDeviceLogs()
+      devicesPage.openDeviceLogs(DEVICE_NAME_EDITED_2)
       devicesPage.retrieveLogsAndVerify()
       devicesPage.searchLogsFor('flightctl')
     })
@@ -161,7 +168,7 @@ describe('Device Management', () => {
 
   describe('Decommission device', () => {
     it('Should decommission a device', () => {
-      devicesPage.decommissionDevice()
+      devicesPage.decommissionDevice(DEVICE_NAME_EDITED_2)
     })
   })
 

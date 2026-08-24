@@ -4,6 +4,7 @@
  *
  * Usage in tests:
  *   cy.task('flightctlConsoleCommand', {
+ *     deviceAlias: 'test-device-edited2',
  *     commands: ['logger -p user.info "test message"', 'whoami']
  *   })
  */
@@ -55,12 +56,17 @@ function getFlightctlBin() {
   return 'flightctl'
 }
 
-function getDeviceName(bin) {
+function getDeviceName(bin, alias) {
   try {
     const output = execSync(`${bin} get devices -o json`, { encoding: 'utf-8', timeout: 15000 })
     const devices = JSON.parse(output)
-    if (devices.items && devices.items.length > 0) {
-      return devices.items[0].metadata.name
+    const items = devices.items || []
+    if (alias) {
+      const match = items.find((d) => d.metadata?.labels?.alias === alias)
+      if (match) return match.metadata.name
+    }
+    if (items.length > 0) {
+      return items[0].metadata.name
     }
   } catch (e) { /* fall through */ }
   return null
@@ -262,11 +268,12 @@ function registerFlightctlConsoleTasks(on) {
       return { seeded: true }
     },
 
-    flightctlConsoleCommand({ commands }) {
+    flightctlConsoleCommand({ commands, deviceAlias }) {
       const bin = getFlightctlBin()
-      const deviceName = getDeviceName(bin)
+      const deviceName = getDeviceName(bin, deviceAlias)
       if (!deviceName) {
-        return [{ cmd: 'get devices', stdout: '', error: `No enrolled device found (using ${bin})` }]
+        const hint = deviceAlias ? ` alias=${deviceAlias}` : ''
+        return [{ cmd: 'get devices', stdout: '', error: `No enrolled device found${hint} (using ${bin})` }]
       }
 
       const results = []
