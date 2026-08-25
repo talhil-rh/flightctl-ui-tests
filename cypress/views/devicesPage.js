@@ -17,6 +17,15 @@ const DEVICE_EVENTS_NORMAL = [
 /** Events list body on device details — Events tab */
 const EVENTS_CONTAINER = '[data-testid="device-events-list"]'
 
+/** Device details → Applications table (standalone UI expandable VM/apps table) */
+const DEVICE_APPLICATIONS_TABLE = '#fctl-applications-table'
+
+/** Device details → Terminal tab → VM serial console (Open console) */
+const APP_CONSOLE_TERMINAL = '[data-testid="app-console-terminal"]'
+const APP_CONSOLE_ERROR = '[data-testid="app-console-connect-error"]'
+const APP_CONSOLE_XTERM_ROWS = `${APP_CONSOLE_TERMINAL} .xterm-rows`
+const APP_CONSOLE_XTERM_INPUT = `${APP_CONSOLE_TERMINAL} .xterm-helper-textarea`
+
 /** RichValidationTextField validation button for approve modal alias */
 const DEVICE_ALIAS_VALIDATION_BTN = '[data-testid="rich-validation-field-deviceAlias-validation-button"]'
 
@@ -68,6 +77,130 @@ const LOG_CATEGORY_TOGGLE = /^(Agent|System|File path)$/
 const LOG_TIME_RANGE_TOGGLE = /^(All time|Last 1 hour|Last 24 hours|Last 7 days|Current boot|Previous boot|Custom range)$/
 const LOG_LEVEL_TOGGLE = /All levels|and above|Only emergency/
 const LOG_RETRIEVE_TIMEOUT = 60000
+
+const VM_APP_DEFAULTS = {
+  mode: 'form',
+  name: 'test-vm',
+  yaml: 'apps/kvm.yaml',
+  diskImage: 'quay.io/containerdisks/fedora:40',
+  memory: '1024M',
+  password: 'fedora',
+  hostPort: '2222',
+  guestPort: '22',
+}
+
+const vmAppFieldId = (index, field) => `textfield-applications[${index}].${field}`
+const vmAppSwitchId = (index, field) => `switchfield-applications[${index}].${field}`
+const vmAppSelectMenuId = (index, field) => `selectfield-applications[${index}].${field}-menu`
+
+const cdp = (command, params = {}) =>
+  Cypress.automation('remote:debugger:protocol', { command, params })
+
+const cdpCtrl = (key, code, vk) => {
+  const ctrl = 2
+  return cdp('Input.dispatchKeyEvent', {
+    type: 'keyDown',
+    key: 'Control',
+    code: 'ControlLeft',
+    windowsVirtualKeyCode: 17,
+    modifiers: ctrl,
+  })
+    .then(() =>
+      cdp('Input.dispatchKeyEvent', {
+        type: 'keyDown',
+        key,
+        code,
+        windowsVirtualKeyCode: vk,
+        modifiers: ctrl,
+      }),
+    )
+    .then(() =>
+      cdp('Input.dispatchKeyEvent', {
+        type: 'keyUp',
+        key,
+        code,
+        windowsVirtualKeyCode: vk,
+        modifiers: ctrl,
+      }),
+    )
+    .then(() =>
+      cdp('Input.dispatchKeyEvent', {
+        type: 'keyUp',
+        key: 'Control',
+        code: 'ControlLeft',
+        windowsVirtualKeyCode: 17,
+      }),
+    )
+}
+
+const pasteYamlIntoMonaco = (content) => {
+  cy.get('.fctl-yaml-editor .monaco-editor', { timeout: 30000 }).scrollIntoView({ block: 'center' }).click({ force: true })
+  cy.get('.fctl-yaml-editor textarea').click({ force: true })
+  cy.window().then((win) => {
+    win.focus()
+    return cdp('Page.bringToFront')
+      .catch(() => undefined)
+      .then(() =>
+        cdp('Browser.grantPermissions', {
+          permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'],
+          origin: win.location.origin,
+        }),
+      )
+      .catch(() => undefined)
+      .then(() => win.navigator.clipboard.writeText(content))
+  })
+  cy.then(() => cdpCtrl('a', 'KeyA', 65))
+  cy.then(() => cdpCtrl('v', 'KeyV', 86))
+  cy.get('.fctl-yaml-editor .view-lines').invoke('text').should('not.be.empty')
+}
+
+const addVmApplication = (index, app = {}) => {
+  const vmApp = { ...VM_APP_DEFAULTS, ...app }
+  const fieldId = (field) => vmAppFieldId(index, field)
+  const typeMenu = `[id="${vmAppSelectMenuId(index, 'appType')}"]`
+
+  cy.get('body').then(($body) => {
+    if ($body.find(typeMenu).length === 0) {
+      cy.contains('button', 'Add application').scrollIntoView().click({ force: true })
+    }
+  })
+  cy.get(typeMenu, { timeout: 15000 }).scrollIntoView({ block: 'center' }).click({ force: true })
+  cy.contains('[role="option"]', 'Virtual machine (KVM)').click()
+  cy.get(`[id="${fieldId('name')}"]`).scrollIntoView({ block: 'center' }).clear({ force: true }).type(vmApp.name, { force: true })
+
+  if (vmApp.mode === 'yaml') {
+    cy.get(`[id="applications[${index}]-yaml-mode"]`).click({ force: true })
+    cy.readFile(vmApp.yaml).then((yaml) => {
+      const content = yaml.replace(/(metadata:\s*\n\s*name:\s*).+/, `$1${vmApp.name}`)
+      pasteYamlIntoMonaco(content)
+    })
+  } else {
+    cy.get(`[id="${fieldId('diskImage')}"]`).clear({ force: true }).type(vmApp.diskImage, { force: true })
+    cy.get(`[id="${fieldId('memory')}"]`).clear({ force: true }).type(vmApp.memory, { force: true })
+    cy.get(`[id="${vmAppSwitchId(index, 'enablePassword')}"]`).click({ force: true })
+    cy.get(`[id="${fieldId('password')}"]`).clear({ force: true }).type(vmApp.password, { force: true, log: false })
+  }
+
+  if (vmApp.hostPort && vmApp.guestPort) {
+    const appSectionAnchor =
+      vmApp.mode === 'yaml'
+        ? `[id="applications[${index}]-yaml-mode"]`
+        : `[id="${fieldId('name')}"]`
+    cy.get(appSectionAnchor)
+      .closest('.pf-v6-c-expandable-section, .pf-c-expandable-section')
+      .scrollIntoView({ block: 'center' })
+      .within(() => {
+        cy.contains('Map ports from inside the VM to the host device')
+          .closest('.pf-v6-c-form__group, .pf-c-form__group')
+          .within(() => {
+            cy.get('input').eq(0).clear({ force: true }).type(vmApp.hostPort, { force: true })
+            cy.get('input[aria-label="VM port"]').clear({ force: true }).type(vmApp.guestPort, { force: true })
+            cy.contains('button', /^Add$/).should('not.be.disabled').click({ force: true })
+          })
+        cy.contains(`${vmApp.hostPort}:${vmApp.guestPort}/tcp`).should('exist')
+      })
+  }
+}
 
 const enrolledDeviceRows = () =>
   cy.get('[data-testid="enrolled-devices-table"] tbody tr[data-testid^="enrolled-device-row-"]')
@@ -128,6 +261,15 @@ const clickEnrolledDeviceNameLinkAcrossPages = (deviceRef, pagesLeft = 8) => {
   })
 }
 
+/** Enrolled-table row by alias. Callers should chain .scrollIntoView() before interacting. */
+const enrolledDeviceRowByAlias = (deviceName, timeout = 60000) =>
+  cy.contains('[data-testid="enrolled-devices-table"] tr', deviceName, { timeout })
+
+const enrolledDeviceLinkByAlias = (deviceName, timeout = 60000) =>
+  enrolledDeviceRowByAlias(deviceName, timeout)
+    .scrollIntoView({ block: 'center' })
+    .find(`[data-testid^="device-name-link-"]`)
+
 /**
  * DevicesPage object for device management operations.
  * Prefer data-testid selectors from flightctl-ui for stability.
@@ -135,7 +277,7 @@ const clickEnrolledDeviceNameLinkAcrossPages = (deviceRef, pagesLeft = 8) => {
 export const devicesPage = {
   openApproveDeviceModal: () => {
     common.navigateTo('Devices')
-    cy.get('[data-testid="list-page-title"]').contains('Devices pending approval')
+    cy.get('[data-testid="list-page-title"]').should('contain', 'Devices pending approval')
     cy.get(`[data-testid="enrollment-request-approve-button-${ROW_0}"]`).should('exist')
     cy.get(`[data-testid="enrollment-request-approve-button-${ROW_0}"]`).should('be.visible')
     cy.get(`[data-testid="enrollment-request-approve-button-${ROW_0}"]`).click()
@@ -160,24 +302,25 @@ export const devicesPage = {
 
   approveDevice: (deviceName = 'test-device') => {
     common.navigateTo('Devices')
-
-    cy.get('[data-testid="list-page-title"]').contains('Devices pending approval')
-    cy.get(`[data-testid="enrollment-request-approve-button-${ROW_0}"]`).should('exist')
-    cy.get(`[data-testid="enrollment-request-approve-button-${ROW_0}"]`).should('be.visible')
-    cy.get(`[data-testid="enrollment-request-approve-button-${ROW_0}"]`).click()
+    cy.get('[data-testid="list-page-title"]', { timeout: 500000 }).should('contain', 'Devices pending approval')
+    cy.contains('.fctl-resource-link__text', new RegExp(`^${deviceName}$`), { timeout: 500000 })
+      .scrollIntoView({ block: 'center' })
+      .closest('tr')
+      .find('[data-testid^="enrollment-request-approve-button-"]')
+      .click()
     cy.get('[data-testid="rich-validation-field-deviceAlias"]').should('be.visible')
     cy.get('[data-testid="rich-validation-field-deviceAlias"]').clear()
     cy.get('[data-testid="rich-validation-field-deviceAlias"]').type(deviceName)
     cy.get('[data-testid="rich-validation-field-deviceAlias"]').should('have.value', deviceName)
     cy.get('[data-testid="approve-device-form-submit"]').should('be.visible')
     cy.get('[data-testid="approve-device-form-submit"]').click()
-    cy.get(`[data-testid="enrolled-device-row-${ROW_0}"]`, { timeout: 500000 }).should('contain', 'Online')
+    enrolledDeviceRowByAlias(deviceName, 500000).should('contain', 'Online')
   },
 
   deviceEvents: (deviceName = 'test-device') => {
     common.navigateTo('Devices')
     cy.wait(1000)
-    cy.contains(`[data-testid^="device-name-link-"]`, deviceName).should('be.visible').click()
+    enrolledDeviceLinkByAlias(deviceName).click()
     cy.wait(1000)
     cy.get('[data-testid="device-details-tab-events"]').should('be.visible').click()
     cy.wait(1000)
@@ -209,9 +352,8 @@ export const devicesPage = {
   editDevice: (image, currentName = 'test-device', newName = 'test-device-edited') => {
     common.navigateTo('Devices')
 
-    cy.contains(`[data-testid^="device-name-link-"]`, currentName).should('be.visible')
-    cy.contains(`[data-testid^="device-name-link-"]`, currentName)
-      .closest('tr')
+    enrolledDeviceRowByAlias(currentName)
+      .scrollIntoView({ block: 'center' })
       .find(`[data-testid^="device-row-actions-"] .pf-v6-c-menu-toggle`)
       .click()
     cy.wait(1000)
@@ -234,7 +376,7 @@ export const devicesPage = {
 
   checkDeviceOutOfDate: (deviceName = 'test-device-edited2') => {
     common.navigateTo('Devices')
-    cy.contains(`[data-testid^="device-name-link-"]`, deviceName).should('be.visible')
+    enrolledDeviceLinkByAlias(deviceName)
 
     const intervalMs = 5000
     const totalMs = 120000
@@ -244,39 +386,43 @@ export const devicesPage = {
       if (attempt > 0) {
         cy.wait(intervalMs)
       }
-      cy.get('[data-testid="enrolled-devices-table"]').then(($table) => {
-        const found = Cypress.$.makeArray($table.find('[data-testid^="device-update-status-"]')).some((el) =>
-          el.textContent.includes('Out-of-date'),
-        )
-        if (found) {
-          cy.get('[data-testid="enrolled-devices-table"]')
-            .find('[data-testid^="device-update-status-"]')
-            .contains('Out-of-date')
-            .should('be.visible')
-        } else if (attempt + 1 < maxAttempts) {
-          pollForOutOfDate(attempt + 1)
-        } else {
-          throw new Error(
-            `Update status did not contain "Out-of-date" within ${totalMs / 1000}s (checked every ${intervalMs / 1000}s)`,
-          )
-        }
-      })
+      enrolledDeviceRowByAlias(deviceName)
+        .then(($tr) => {
+          const found = $tr.find('[data-testid^="device-update-status-"]').text().includes('Out-of-date')
+          if (found) {
+            cy.wrap($tr)
+              .find('[data-testid^="device-update-status-"]')
+              .contains('Out-of-date')
+              .should('be.visible')
+          } else if (attempt + 1 < maxAttempts) {
+            pollForOutOfDate(attempt + 1)
+          } else {
+            throw new Error(
+              `Update status did not contain "Out-of-date" within ${totalMs / 1000}s (checked every ${intervalMs / 1000}s)`,
+            )
+          }
+        })
     }
     pollForOutOfDate(0)
   },
 
-  decommissionDevice: () => {
+  decommissionDevice: (deviceName = 'test-device-edited2') => {
     common.navigateTo('Devices')
 
-    cy.get(`[data-testid="enrolled-device-row-${ROW_0}"]`).find('input[type="checkbox"]').should('be.visible')
-    cy.get(`[data-testid="enrolled-device-row-${ROW_0}"]`).find('input[type="checkbox"]').click()
+    enrolledDeviceRowByAlias(deviceName)
+      .scrollIntoView({ block: 'center' })
+      .find('input[type="checkbox"]')
+      .should('be.visible')
+      .click()
     cy.get('[data-testid="toolbar-decommission-devices"]').should('be.visible')
     cy.get('[data-testid="toolbar-decommission-devices"]').click()
     cy.get('[data-testid="modal-decommission-confirm"]').should('be.visible')
     cy.get('[data-testid="modal-decommission-confirm"]').click()
-    cy.get('[data-testid="toolbar-delete-forever"]').should('be.visible')
-    cy.get('table thead input[type="checkbox"]').should('be.visible')
-    cy.get('table thead input[type="checkbox"]').click()
+    cy.get('[data-testid="decommissioned-devices-table"]').should('exist')
+    cy.get('[data-testid="decommissioned-devices-table"] thead input[type="checkbox"]')
+      .scrollIntoView({ block: 'center' })
+      .should('be.visible')
+      .click()
     cy.get('[data-testid="toolbar-delete-forever"]').should('be.visible')
     cy.get('[data-testid="toolbar-delete-forever"]').click()
     cy.get('[data-testid="modal-delete-devices-confirm"]').should('be.visible')
@@ -288,8 +434,7 @@ export const devicesPage = {
   openTerminal: (deviceName = 'test-device') => {
     common.navigateTo('Devices')
 
-    cy.contains(`[data-testid^="device-name-link-"]`, deviceName).should('be.visible')
-    cy.contains(`[data-testid^="device-name-link-"]`, deviceName).click()
+    enrolledDeviceLinkByAlias(deviceName).click()
     cy.get('[data-testid="device-details-tab-terminal"]', { timeout: 30000 }).should('be.visible').click()
     cy.get('[data-testid="device-terminal-panel"]', { timeout: 50000 }).should('be.visible')
     cy.get('[data-testid="device-terminal-panel"]').click()
@@ -298,11 +443,13 @@ export const devicesPage = {
   openDeviceLogs: (deviceName) => {
     common.navigateTo('Devices')
     if (deviceName) {
-      cy.contains(`[data-testid^="device-name-link-"]`, deviceName, { timeout: 15000 })
-        .should('be.visible').click()
+      enrolledDeviceLinkByAlias(deviceName, 15000).click()
     } else {
       cy.get(`[data-testid^="device-name-link-"]`, { timeout: 15000 })
-        .first().should('be.visible').click()
+        .first()
+        .scrollIntoView({ block: 'center' })
+        .should('be.visible')
+        .click()
     }
     cy.get(LOGS_TAB, { timeout: 15000 }).should('be.visible').click()
     cy.contains('button', 'Retrieve logs', { timeout: 15000 }).should('be.visible')
@@ -539,5 +686,103 @@ export const devicesPage = {
   addFleetLabelOnDeviceDetails: (labelText = SCALE_FLEET_LABEL_TEXT) => {
     cy.contains('button', 'Add label').click()
     cy.get('input[aria-label="New label"]').clear().type(`${labelText}{enter}`)
+  },
+
+  openEditDeviceConfigurations: (deviceName) => {
+    common.navigateTo('Devices')
+    enrolledDeviceRowByAlias(deviceName)
+      .scrollIntoView({ block: 'center' })
+      .find(`[data-testid^="device-row-actions-"] .pf-v6-c-menu-toggle`)
+      .click()
+    cy.contains('Edit device configurations').click()
+    cy.contains('h1', 'Edit device').should('be.visible')
+    cy.get('[data-testid="wizard-next-button"]').should('be.visible')
+  },
+
+  addApplications: (deviceName, apps) => {
+    devicesPage.openEditDeviceConfigurations(deviceName)
+    cy.get('[data-testid="wizard-next-button"]').click()
+    apps.forEach((app, index) => {
+      addVmApplication(index, app)
+    })
+    cy.get('[data-testid="wizard-next-button"]').click()
+    cy.get('[data-testid="wizard-next-button"]').click()
+    cy.get('[data-testid="wizard-save-button"]').click()
+    cy.get('[data-testid="device-details-title"]', { timeout: 120000 }).should('contain', deviceName)
+  },
+
+  waitForVmAppRunning: (deviceName = 'test-device', appName = 'test-vm', timeoutMs = 600000) => {
+    cy.get('[data-testid="device-details-title"]', { timeout: 30000 }).should('contain', deviceName)
+    cy.get(DEVICE_APPLICATIONS_TABLE, { timeout: timeoutMs }).scrollIntoView({ block: 'center' })
+    cy.get(DEVICE_APPLICATIONS_TABLE)
+      .find('td[data-label="Name"]')
+      .contains(new RegExp(`^${appName}$`), { timeout: timeoutMs })
+      .parents('tr')
+      .find('td[data-label="Status"]', { timeout: timeoutMs })
+      .should('contain', 'Running')
+  },
+
+  openVmAppConsole: (deviceName = 'test-device', appName = 'test-vm') => {
+    common.navigateTo('Devices')
+    enrolledDeviceLinkByAlias(deviceName).click()
+    cy.get('[data-testid="device-details-title"]').should('contain', deviceName)
+    cy.get(DEVICE_APPLICATIONS_TABLE).scrollIntoView({ block: 'center' })
+    cy.get(DEVICE_APPLICATIONS_TABLE)
+      .find('td[data-label="Name"]')
+      .contains(new RegExp(`^${appName}$`))
+      .parents('tr')
+      .as('vmAppRow')
+    cy.get('@vmAppRow').find('button[aria-label="Details"]').then(($btn) => {
+      if ($btn.attr('aria-expanded') !== 'true') {
+        cy.wrap($btn).click()
+      }
+    })
+    cy.get('@vmAppRow').next('tr').contains('button', 'Open console').should('not.be.disabled').click()
+    cy.get('[data-testid="device-terminal-panel"]', { timeout: 30000 }).should('be.visible')
+    cy.get(`${APP_CONSOLE_TERMINAL}, ${APP_CONSOLE_ERROR}`, { timeout: 90000 }).should('be.visible')
+    cy.get('body').then(($body) => {
+      if ($body.find(APP_CONSOLE_ERROR).length) {
+        cy.contains('End active session').click()
+        cy.contains('End session and connect').click()
+      }
+    })
+    cy.get(APP_CONSOLE_TERMINAL, { timeout: 60000 }).should('be.visible')
+    cy.get(APP_CONSOLE_XTERM_ROWS, { timeout: 30000 }).invoke('text').should('include', 'Connected to serial console')
+  },
+
+  selectVmConsole: (appName) => {
+    cy.get('[data-testid="device-terminal-panel"] .pf-v6-c-menu-toggle').click()
+    cy.contains('[role="option"]', appName).click()
+    cy.get(`${APP_CONSOLE_TERMINAL}, ${APP_CONSOLE_ERROR}`, { timeout: 90000 }).should('be.visible')
+    cy.get('body').then(($body) => {
+      if ($body.find(APP_CONSOLE_ERROR).length) {
+        cy.contains('End active session').click()
+        cy.contains('End session and connect').click()
+      }
+    })
+    cy.get(APP_CONSOLE_TERMINAL, { timeout: 60000 }).should('be.visible')
+    cy.get(APP_CONSOLE_XTERM_ROWS, { timeout: 30000 })
+      .invoke('text')
+      .should('include', `Connected to serial console: ${appName}`)
+  },
+
+  loginVmSerialConsole: (user = 'fedora', password = 'fedora') => {
+    cy.get(APP_CONSOLE_XTERM_INPUT, { timeout: 30000 }).should('exist').click({ force: true }).type('{enter}', { force: true })
+    cy.get(APP_CONSOLE_XTERM_ROWS, { timeout: 120000 }).should(($el) => {
+      expect($el.text()).to.match(/login:/i)
+    })
+    cy.get(APP_CONSOLE_XTERM_INPUT).click({ force: true }).type(`${user}{enter}`, { force: true, delay: 50 })
+    cy.get(APP_CONSOLE_XTERM_ROWS, { timeout: 30000 }).should(($el) => {
+      expect($el.text()).to.match(/Password:/i)
+    })
+    cy.get(APP_CONSOLE_XTERM_INPUT).type(`${password}{enter}`, { force: true, delay: 50, log: false })
+    cy.get(APP_CONSOLE_XTERM_INPUT).type('{enter}', { force: true })
+    cy.get(APP_CONSOLE_XTERM_ROWS, { timeout: 60000 }).should(($el) => {
+      expect($el.text()).to.match(new RegExp(`${user}@`))
+    })
+    cy.get(APP_CONSOLE_XTERM_INPUT).type('whoami{enter}', { force: true, delay: 50 })
+    cy.get(APP_CONSOLE_XTERM_ROWS, { timeout: 30000 }).should(($el) => {
+      expect($el.text()).to.match(new RegExp(`whoami[\\s\\S]*${user}`))
+    })
   },
 }
