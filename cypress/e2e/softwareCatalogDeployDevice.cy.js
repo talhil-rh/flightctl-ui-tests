@@ -2,7 +2,6 @@ import {
   softwareCatalogPage,
   getCatalogItemName,
 } from '../views/softwareCatalogPage'
-import { devicesPage } from '../views/devicesPage'
 
 /**
  * Deploy a catalog item to a single device (not a fleet) and verify
@@ -17,8 +16,8 @@ import { devicesPage } from '../views/devicesPage'
  *
  * Set CYPRESS_DEVICE_ALIAS to override the alias (default: "device6").
  */
-const DEVICE_ALIAS = Cypress.env('deviceAlias') || 'device6'
 const SIM_LABEL = 'env=catalog-deploy-test'
+const DEVICE_ALIAS = Cypress.env('deviceAlias') || 'device-00100'
 
 describe('Software Catalog – Deploy to device & Delete protection', () => {
   before(() => {
@@ -37,9 +36,9 @@ describe('Software Catalog – Deploy to device & Delete protection', () => {
   })
 
   // ══════════════════════════════════════════════════════════════════════════
-  // Step 0: Create a simulated device and approve it
+  // Step 0: Create a simulated device (auto-enrolled by the simulator)
   // ══════════════════════════════════════════════════════════════════════════
-  describe('Create simulated device and approve enrollment', () => {
+  describe('Create simulated device', () => {
     it('Should start the device simulator with 1 device', () => {
       cy.task('scaleFleetSimulatorStart', {
         count: 1,
@@ -48,16 +47,17 @@ describe('Software Catalog – Deploy to device & Delete protection', () => {
       })
     })
 
-    it('Should wait for enrollment request to appear', () => {
+    it('Should wait for the device to be enrolled', () => {
       cy.task(
-        'agentVmWaitForEnrollment',
-        { timeoutMs: 300000, pollMs: 10000 },
+        'scaleFleetSimulatorWaitForDevices',
+        {
+          expected: 1,
+          labelSelector: SIM_LABEL,
+          timeoutMs: 300000,
+          pollMs: 5000,
+        },
         { timeout: 330000 },
       )
-    })
-
-    it('Should approve the pending device and assign alias', () => {
-      devicesPage.approveDevice(DEVICE_ALIAS)
     })
   })
 
