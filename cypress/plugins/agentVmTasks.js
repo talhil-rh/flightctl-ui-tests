@@ -18,27 +18,21 @@ function registerAgentVmTasks(on) {
   on('task', {
     agentVmCreate({
       vmName = 'device6',
-      excludeVariants = 'v2 v3 v4 v5 v6 v7 v8 v9 v10 v11 v12',
+      mem = '2048',
+      sshPort = '2222',
     } = {}) {
       const flightctlDir = getFlightctlDir()
-      const goPath = path.join(os.homedir(), 'go')
-      const kubeconfig = process.env.KUBECONFIG || path.join(os.homedir(), 'clusterconfigs', 'auth', 'kubeconfig')
-      const cmd = [
-        `export PATH=/usr/local/go/bin:${goPath}/bin:/usr/local/bin:$PATH`,
-        `export GOPATH=${goPath}`,
-        `export KUBECONFIG=${kubeconfig}`,
-        `cd ${flightctlDir}`,
-        `make agent-vm VMNAME=${vmName} EXCLUDE_VARIANTS="${excludeVariants}"`,
-      ].join(' && ')
+      const devVmBin = path.join(flightctlDir, 'bin', 'flightctl-dev-vm')
+      const args = ['start', '--name', vmName, '--mem', mem, '--ssh-port', sshPort]
       try {
-        const out = execSync(cmd, {
+        const out = execFileSync(devVmBin, args, {
+          cwd: flightctlDir,
           encoding: 'utf8',
           timeout: 300000,
-          shell: '/bin/bash',
         })
         return { vmName, output: out }
       } catch (e) {
-        throw new Error(`make agent-vm failed for ${vmName}: ${e.stderr || e.message}`)
+        throw new Error(`flightctl-dev-vm start failed for ${vmName}: ${e.stderr || e.message}`)
       }
     },
 
@@ -73,8 +67,9 @@ function registerAgentVmTasks(on) {
 
     agentVmDestroy({ vmName = 'device6' } = {}) {
       const flightctlDir = getFlightctlDir()
+      const devVmBin = path.join(flightctlDir, 'bin', 'flightctl-dev-vm')
       try {
-        execFileSync('make', ['clean-agent-vm', `VMNAME=${vmName}`], {
+        execFileSync(devVmBin, ['delete', '--name', vmName], {
           cwd: flightctlDir,
           encoding: 'utf8',
           timeout: 60000,
