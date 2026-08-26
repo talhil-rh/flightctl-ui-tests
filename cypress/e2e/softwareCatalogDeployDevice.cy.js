@@ -11,18 +11,23 @@ import { devicesPage } from '../views/devicesPage'
  * Pre-requisites:
  *   - The catalog item from the build-image test exists in the catalog.
  *
- * The test creates its own device via `make agent-vm`, approves it,
- * deploys the catalog item, and verifies delete protection.
+ * The test creates its own device via the device simulator (1 device),
+ * approves it through the UI, deploys the catalog item, and verifies
+ * delete protection.
  *
  * Set CYPRESS_DEVICE_ALIAS to override the alias (default: "device6").
  */
 const DEVICE_ALIAS = Cypress.env('deviceAlias') || 'device6'
-const VM_NAME = Cypress.env('agentVmName') || 'device6'
+const SIM_LABEL = 'env=catalog-deploy-test'
 
 describe('Software Catalog – Deploy to device & Delete protection', () => {
   before(() => {
     Cypress.on('uncaught:exception', () => false)
     cy.ensureLoggedIn()
+  })
+
+  after(() => {
+    cy.task('scaleFleetSimulatorStop')
   })
 
   afterEach(function () {
@@ -32,11 +37,15 @@ describe('Software Catalog – Deploy to device & Delete protection', () => {
   })
 
   // ══════════════════════════════════════════════════════════════════════════
-  // Step 0: Create agent VM and approve device
+  // Step 0: Create a simulated device and approve it
   // ══════════════════════════════════════════════════════════════════════════
-  describe('Create agent VM and approve device enrollment', () => {
-    it('Should create an agent VM', () => {
-      cy.task('agentVmCreate', { vmName: VM_NAME }, { timeout: 360000 })
+  describe('Create simulated device and approve enrollment', () => {
+    it('Should start the device simulator with 1 device', () => {
+      cy.task('scaleFleetSimulatorStart', {
+        count: 1,
+        label: SIM_LABEL,
+        initialDeviceIndex: 100,
+      })
     })
 
     it('Should wait for enrollment request to appear', () => {
