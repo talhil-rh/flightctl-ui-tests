@@ -10,11 +10,10 @@ import {
  * Pre-requisites:
  *   - The catalog item from the build-image test exists in the catalog.
  *
- * The test creates its own device via the device simulator (1 device),
- * approves it through the UI, deploys the catalog item, and verifies
- * delete protection.
- *
- * Set CYPRESS_DEVICE_ALIAS to override the alias (default: "device6").
+ * The test creates its own device via the device simulator (1 device).
+ * After enrollment the simulator is stopped and the device's osMode is
+ * patched from "package" to "image" so the deploy wizard accepts it
+ * (package-based devices are excluded from the deploy target list).
  */
 const SIM_LABEL = 'env=catalog-deploy-test'
 const DEVICE_ALIAS = Cypress.env('deviceAlias') || 'device-00100'
@@ -57,6 +56,22 @@ describe('Software Catalog – Deploy to device & Delete protection', () => {
           pollMs: 5000,
         },
         { timeout: 330000 },
+      )
+    })
+
+    it('Should stop the simulator so osMode can be patched', () => {
+      cy.task('scaleFleetSimulatorStop')
+    })
+
+    it('Should patch the device osMode from "package" to "image"', () => {
+      cy.task('getDeviceNameByLabel', { labelSelector: SIM_LABEL }).then(
+        (deviceName) => {
+          cy.task('patchDeviceOsMode', { deviceName, osMode: 'image' }).then(
+            (result) => {
+              expect(result.success).to.be.true
+            },
+          )
+        },
       )
     })
   })
