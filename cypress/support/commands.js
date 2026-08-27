@@ -39,7 +39,6 @@ const tryCloseConsoleWelcomeTourModal = (attempt = 1, maxRetries = 10, retryDela
  */
 const tryCloseOnboardingModal = (attempt = 1, maxRetries = 15, retryDelay = 2000) => {
   cy.get('body').then(($body) => {
-    const $jq = Cypress.$
     const $ouiaBtn = $body.find('[data-ouia-component-id="clustersOnboardingModal-ModalBoxCloseButton"]')
     if ($ouiaBtn.length > 0) {
       cy.get('[data-ouia-component-id="clustersOnboardingModal-ModalBoxCloseButton"]').click()

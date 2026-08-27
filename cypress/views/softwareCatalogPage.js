@@ -142,32 +142,4 @@ export const softwareCatalogPage = {
   closeKebabDropdown: () => {
     cy.get('body').type('{esc}')
   },
-
-  /**
-   * On the device details Catalog tab, remove a deployed catalog item if present.
-   * Opens the kebab on the deployed item row, clicks Delete, and confirms.
-   * No-op if the catalog item is not listed under "Deployed Software".
-   */
-  removeDeployedItemFromDevice: (catalogItemName) => {
-    cy.get('body').then(($body) => {
-      if ($body.text().includes('Deployed Software') && $body.text().includes(catalogItemName)) {
-        cy.contains(catalogItemName)
-          .closest('[class*="list-item"], tr, [class*="card"], li')
-          .find('button.pf-v6-c-menu-toggle, [aria-label="Actions"], [aria-label="Kebab toggle"]')
-          .first()
-          .click()
-        cy.contains('button', 'Delete').should('be.visible').click()
-        cy.get('.pf-v6-c-modal-box', { timeout: 10000 }).should('be.visible')
-        cy.get('.pf-v6-c-modal-box').then(($modal) => {
-          const $confirm = $modal.find('button:contains("Delete"), button:contains("Confirm"), button:contains("Remove")')
-          if ($confirm.length) {
-            cy.wrap($confirm.first()).click()
-          }
-        })
-        cy.contains(catalogItemName, { timeout: 10000 }).should('not.exist')
-      } else {
-        cy.log(`"${catalogItemName}" not deployed on this device, no cleanup needed`)
-      }
-    })
-  },
 }
